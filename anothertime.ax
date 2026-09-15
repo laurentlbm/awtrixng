@@ -12,12 +12,14 @@
 # @config ssun bool "Week starts Sunday" default=false
 # @config wa select "Widgets animation" options=scroll,fade default=fade
 # @config wad slider "Widgets animation duration" min=100 max=2000 default=500 unit=ms
+# @config ttopic text "Temperature topic" default=""
+# @config htopic text "Humidity topic" default=""
 # @config btopic text "Battery topic" default=""
 # @config wlist text "Widgets" default="date,temperature,humidity,battery" help="ex: date,temperature@5,humidity,date@4,battery" maxlen=200
 
 import math
 
-class MyApp
+class Anothertime
   var cur, prev   # digits courants/précédents
   var hh, mm      # heure et minute courantes (pour éviter de recalculer à chaque draw())
   var cur_min
@@ -34,7 +36,7 @@ class MyApp
   var tc                  # text color from settings
 
   var temp, hum, lbat   # libellés capteurs, construits en loop()
-  var mbat # boolean pour savoir si on a un topic mqtt pour la batterie
+  var mtemp, mhum, mbat # boolean pour savoir si on a un topic mqtt pour la température, l'humidité ou la batterie
   var bat # valeur de la batterie (0-100) ou -1 si non disponible
   var day_n, day_s, dsty
 
@@ -106,15 +108,37 @@ class MyApp
     else
       self.mbat = false
     end
+
+    self.temp = "?"
+    var ttopic = store.get("ttopic")
+    if ttopic != nil && size(ttopic) > 0
+      mqtt.subscribe(ttopic, / t, p -> self.set_temp(p))
+      self.mtemp = true
+    else
+      self.mtemp = false
+    end
+
+    self.hum = "?"
+    var htopic = store.get("htopic")
+    if htopic != nil && size(htopic) > 0
+      mqtt.subscribe(htopic, / t, p -> self.set_hum(p))
+      self.mhum = true
+    else
+      self.mhum = false
+    end
   end
 
   def update()
     
     # sensors
-    var t = sensor.temperature()
-    self.temp = t == nil ? "?" : str(round(settings.get("useCelsius") ? t : (t * 1.8 + 32)))
-    var hmd = sensor.humidity()
-    self.hum = hmd == nil ? "?" : str(round(hmd))
+    if !self.mtemp
+      var t = sensor.temperature()
+      self.temp = t == nil ? "?" : str(round(settings.get("useCelsius") ? t : (t * 1.8 + 32)))
+    end
+    if !self.mhum
+      var hmd = sensor.humidity()
+      self.hum = hmd == nil ? "?" : str(round(hmd))
+    end
 
     # on ne lit la batterie depuis le sensor que si on n'a pas de topic mqtt pour ça
     if !self.mbat
@@ -141,6 +165,14 @@ class MyApp
   def setbat(b)
     self.bat = b == nil ? -1 : num(b)
     self.lbat = self.bat < 0 ? "?" : str(self.bat)
+  end
+
+  def set_temp(t)
+    self.temp = t == nil ? "?" : str(num(t))
+  end
+
+  def set_hum(h)
+    self.hum = h == nil ? "?" : str(num(h))
   end
 
   def loop()
@@ -431,4 +463,4 @@ class MyApp
 
 end
 
-return MyApp()
+return Anothertime()
